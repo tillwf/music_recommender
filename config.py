@@ -14,5 +14,8 @@ LANGFUSE_PUBLIC_KEY = os.environ.get("LANGFUSE_PUBLIC_KEY", "")
 LANGFUSE_SECRET_KEY = os.environ.get("LANGFUSE_SECRET_KEY", "")
 LANGFUSE_HOST = os.environ.get("LANGFUSE_HOST", "https://cloud.langfuse.com")
 
+# Raindrop
+RAINDROP_WRITE_KEY = os.environ.get("RAINDROP_WRITE_KEY", "")
+
 # App
 DATABASE_PATH = os.environ.get("DATABASE_PATH", "music_recommender.db")

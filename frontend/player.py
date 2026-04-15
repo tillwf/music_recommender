@@ -2,7 +2,7 @@ import streamlit as st
 
 from backend.database import add_vote
 from backend.recommender import get_next_song, get_session_summary
-from backend.observability import submit_recommendation_evaluation
+from backend.observability import submit_recommendation_evaluation, track_raindrop_signal
 
 
 def _on_vote(known: bool, liked: bool):
@@ -41,6 +41,33 @@ def _on_vote(known: bool, liked: bool):
 
     # Submit discovery evaluation to Datadog
     submit_recommendation_evaluation(span_context, known, liked)
+
+    # Submit vote signal to Raindrop
+    raindrop_event_id = track.get("raindrop_event_id")
+    if raindrop_event_id:
+        if not known and liked:
+            signal_name, sentiment = "discovery_success", "POSITIVE"
+        elif known and liked:
+            signal_name, sentiment = "known_liked", "POSITIVE"
+        elif not known and not liked:
+            signal_name, sentiment = "discovery_miss", "NEGATIVE"
+        else:
+            signal_name, sentiment = "known_disliked", "NEGATIVE"
+        if feedback:
+            track_raindrop_signal(
+                event_id=raindrop_event_id,
+                name=signal_name,
+                signal_type="feedback",
+                sentiment=sentiment,
+                comment=feedback,
+            )
+        else:
+            track_raindrop_signal(
+                event_id=raindrop_event_id,
+                name=signal_name,
+                signal_type="default",
+                sentiment=sentiment,
+            )
 
     st.session_state.current_track = next_track
     st.session_state.strategy_text = explanation

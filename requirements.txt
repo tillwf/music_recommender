@@ -3,3 +3,4 @@ openai
 ddtrace
 langfuse
 mcp
+raindrop-ai

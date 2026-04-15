@@ -1,9 +1,10 @@
+import atexit
 import uuid
 
 import streamlit as st
 
 from backend.database import init_db
-from backend.observability import init_observability
+from backend.observability import init_observability, shutdown_observability
 from backend.recommender import get_first_song, init_conversation
 from frontend import player, strategy, summary
 
@@ -12,6 +13,7 @@ st.title("Music Recommender")
 
 init_db()
 init_observability()
+atexit.register(shutdown_observability)
 
 # Initialize session state
 if "session_id" not in st.session_state:

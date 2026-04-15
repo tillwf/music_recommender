@@ -1,11 +1,13 @@
 from ddtrace.llmobs import LLMObs
 from langfuse.openai import OpenAI
+import raindrop.analytics as raindrop
+from raindrop.analytics import Instruments
 
-from config import OPENAI_API_KEY
+from config import OPENAI_API_KEY, RAINDROP_WRITE_KEY
 
 
 def init_observability():
-    """Initialize Datadog LLM Observability SDK.
+    """Initialize Datadog LLM Observability SDK and Raindrop AI.
 
     Called once at app startup. Works alongside ddtrace-run which handles
     APM and auto-instrumentation. This adds manual span control, evaluations,
@@ -15,6 +17,8 @@ def init_observability():
         ml_app="music-recommender",
         agentless_enabled=True,
     )
+    if RAINDROP_WRITE_KEY:
+        raindrop.init(RAINDROP_WRITE_KEY, tracing_enabled=True, instruments={Instruments.OPENAI})
 
 
 def get_openai_client():
@@ -75,3 +79,37 @@ def submit_session_evaluation(span_context, discovery_rate, total_songs):
         assessment="pass" if discovery_rate > 0.3 else "fail",
         reasoning=f"User discovered new liked songs {discovery_rate:.0%} of the time ({total_songs} songs total)",
     )
+
+
+def track_raindrop_ai(user_id, event, model, input_text, output_text, convo_id, properties=None):
+    """Log a semantic AI event to Raindrop. Returns the event_id for signal linking."""
+    if not RAINDROP_WRITE_KEY:
+        return None
+    return raindrop.track_ai(
+        user_id=user_id,
+        event=event,
+        model=model,
+        input=input_text,
+        output=output_text,
+        convo_id=convo_id,
+        properties=properties or {},
+    )
+
+
+def track_raindrop_signal(event_id, name, signal_type, sentiment, comment=None):
+    """Submit a user feedback signal to Raindrop, linked to a specific AI event."""
+    if not RAINDROP_WRITE_KEY:
+        return
+    raindrop.track_signal(
+        event_id=event_id,
+        name=name,
+        signal_type=signal_type,
+        sentiment=sentiment,
+        comment=comment,
+    )
+
+
+def shutdown_observability():
+    """Flush and shut down observability SDKs."""
+    if RAINDROP_WRITE_KEY:
+        raindrop.shutdown()

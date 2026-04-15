@@ -5,7 +5,7 @@ import random
 from ddtrace.llmobs import LLMObs
 from ddtrace.llmobs.decorators import task, tool, workflow
 
-from backend.observability import get_openai_client
+from backend.observability import get_openai_client, track_raindrop_ai
 from backend.database import get_session_history, get_session_summary_data
 from backend.spotify_client import search_tracks
 from config import OPENAI_MODEL
@@ -302,6 +302,16 @@ def get_first_song(session_id):
             tags={"session_id": session_id},
         )
 
+        track["raindrop_event_id"] = track_raindrop_ai(
+            user_id=session_id,
+            event="first_song",
+            model=OPENAI_MODEL,
+            input_text="Start session — pick a popular song",
+            output_text=f"{track['artist_name']} - {track['track_name']}",
+            convo_id=session_id,
+            properties={"hint": hint},
+        )
+
     return track
 
 
@@ -399,9 +409,25 @@ def get_next_song(session_id, strategist_messages, recommender_messages, vote_re
             input_data=vote_msg,
             output_data=f"{track['artist_name']} - {track['track_name']}",
             metadata={"strategy": strategy, "model": OPENAI_MODEL},
-            tags={"session_id": session_id},
+            tags={
+                "session_id": session_id,
+                "has_feedback": "true" if vote_result.get("feedback") else "false",
+            },
         )
         span_context = LLMObs.export_span(span=wf_span)
+
+        track["raindrop_event_id"] = track_raindrop_ai(
+            user_id=session_id,
+            event="recommendation_cycle",
+            model=OPENAI_MODEL,
+            input_text=vote_msg,
+            output_text=f"{track['artist_name']} - {track['track_name']}",
+            convo_id=session_id,
+            properties={
+                "strategy": strategy,
+                "has_feedback": bool(vote_result.get("feedback")),
+            },
+        )
 
     track["strategy_text"] = explanation
     track["llm_prompt"] = rec_user_msg
@@ -439,6 +465,20 @@ def get_session_summary(session_id):
             tags={"session_id": session_id},
         )
         span_context = LLMObs.export_span(span=span)
+
+        track_raindrop_ai(
+            user_id=session_id,
+            event="session_summary",
+            model=OPENAI_MODEL,
+            input_text=summary_data,
+            output_text=raw,
+            convo_id=session_id,
+            properties={
+                "total_songs": total,
+                "discoveries": discoveries,
+                "discovery_rate": discovery_rate,
+            },
+        )
 
     return {
         "badge_name": parsed.get("badge_name", "Music Listener"),
