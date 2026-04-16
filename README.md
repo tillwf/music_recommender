@@ -23,4 +23,5 @@ This starts the Streamlit app with Datadog LLM Observability tracing enabled.
 
 - **Spotify** - for track search and embeds
 - **OpenAI** - for the recommendation LLM calls
-- **Datadog** - for LLM observability
+- **Datadog** - for LLM observability (`DD_SERVICE` is used as the `ml_app` name in LLM Obs)
+- **Raindrop** - for AI analytics and user feedback signals

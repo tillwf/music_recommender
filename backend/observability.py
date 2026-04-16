@@ -3,7 +3,7 @@ from langfuse.openai import OpenAI
 import raindrop.analytics as raindrop
 from raindrop.analytics import Instruments
 
-from config import OPENAI_API_KEY, RAINDROP_WRITE_KEY
+from config import DD_SERVICE, OPENAI_API_KEY, RAINDROP_WRITE_KEY
 
 
 def init_observability():
@@ -14,7 +14,7 @@ def init_observability():
     and session tracking.
     """
     LLMObs.enable(
-        ml_app="music-recommender",
+        ml_app=DD_SERVICE,
         agentless_enabled=True,
     )
     if RAINDROP_WRITE_KEY:
@@ -62,7 +62,7 @@ def submit_recommendation_evaluation(span_context, known, liked):
         label="discovery",
         metric_type="score",
         value=score,
-        ml_app="music-recommender",
+        ml_app=DD_SERVICE,
         assessment=assessment,
         reasoning=reasoning,
     )
@@ -75,7 +75,7 @@ def submit_session_evaluation(span_context, discovery_rate, total_songs):
         label="session_discovery_rate",
         metric_type="score",
         value=discovery_rate,
-        ml_app="music-recommender",
+        ml_app=DD_SERVICE,
         assessment="pass" if discovery_rate > 0.3 else "fail",
         reasoning=f"User discovered new liked songs {discovery_rate:.0%} of the time ({total_songs} songs total)",
     )
