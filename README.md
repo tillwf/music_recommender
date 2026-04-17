@@ -17,7 +17,7 @@ cp .env.example .env  # fill in your API keys
 ./run.sh
 ```
 
-This starts the Streamlit app with Datadog LLM Observability tracing enabled.
+This starts the Streamlit app with Datadog LLM Observability tracing enabled. `DD_SERVICE` from `.env` is used as the `ml_app` name for both `ddtrace-run` and the LLM Obs SDK.
 
 ## Required API keys
 
