@@ -8,6 +8,8 @@ if [ -f .env ]; then
     set +a
 fi
 
+DD_SERVICE="${DD_SERVICE:-music-recommender}"
+
 DD_LLMOBS_ENABLED=1 \
 DD_LLMOBS_AGENTLESS_ENABLED=1 \
 DD_LLMOBS_ML_APP="${DD_SERVICE}" \
