@@ -4,3 +4,5 @@ ddtrace
 langfuse
 mcp
 raindrop-ai
+fastapi
+uvicorn[standard]
