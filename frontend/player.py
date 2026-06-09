@@ -102,8 +102,6 @@ def render():
             ' style="border-radius:12px"></iframe>',
             unsafe_allow_html=True,
         )
-    else:
-        st.warning("No Spotify embed available for this track.")
 
     st.text_input("Any thoughts on this song? (optional)", key="feedback_text")
 

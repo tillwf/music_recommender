@@ -8,7 +8,7 @@ from ddtrace.llmobs.decorators import task, tool, workflow
 from backend.observability import get_openai_client, track_raindrop_ai
 from backend.database import get_session_history, get_session_summary_data
 from backend.spotify_client import search_tracks
-from config import OPENAI_MODEL
+from config import OPENAI_MODEL, SPOTIFY_AVAILABLE
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +68,22 @@ FIRST_SONG_SYSTEM = """Pick a well-known, popular song that most people would re
 You have a tool available: spotify_search. Call it to verify the song exists on Spotify.
 
 After calling the tool, respond with valid JSON: {"artist": "...", "track": "..."}"""
+
+RECOMMENDER_SYSTEM_NO_SPOTIFY = """You are a music recommendation engine. Pick ONE specific song that matches the given strategy.
+
+The ultimate goal is to help the user discover songs they DON'T KNOW and WILL LIKE. Pay attention to any free-text feedback in the history — it reveals what specifically the user enjoys or dislikes about songs.
+
+Rules:
+- Pick a real, existing song
+- Do NOT repeat any song from the session history
+- Do NOT repeat any artist already in the session history
+- Match the strategy as closely as possible
+
+Respond with valid JSON: {"artist": "...", "track": "..."}"""
+
+FIRST_SONG_SYSTEM_NO_SPOTIFY = """Pick a well-known, popular song that most people would recognize. Choose something fun and upbeat that works as a conversation starter about music taste.
+
+Respond with valid JSON: {"artist": "...", "track": "..."}"""
 
 SUMMARIZER_SYSTEM = """You are a music taste analyst. Based on a user's listening session, create a fun summary of their taste and award them a creative badge.
 
@@ -239,9 +255,10 @@ def _llm_call_with_history(messages, temperature=0.7, tools=None):
 
 def init_conversation():
     """Return initial conversation message lists."""
+    rec_system = RECOMMENDER_SYSTEM if SPOTIFY_AVAILABLE else RECOMMENDER_SYSTEM_NO_SPOTIFY
     return (
         [{"role": "system", "content": STRATEGIST_SYSTEM}],
-        [{"role": "system", "content": RECOMMENDER_SYSTEM}],
+        [{"role": "system", "content": rec_system}],
     )
 
 
@@ -262,30 +279,37 @@ _FIRST_SONG_HINTS = [
 def get_first_song(session_id):
     """Pick a popular starting song. Returns (track_dict, recommender_messages)."""
     hint = random.choice(_FIRST_SONG_HINTS)
+    system = FIRST_SONG_SYSTEM if SPOTIFY_AVAILABLE else FIRST_SONG_SYSTEM_NO_SPOTIFY
     messages = [
-        {"role": "system", "content": FIRST_SONG_SYSTEM},
+        {"role": "system", "content": system},
         {"role": "user", "content": f"Pick a song to start the session. {hint}"},
     ]
 
     with LLMObs.workflow(name="first_song", session_id=session_id) as span:
         with LLMObs.annotation_context(prompt=FIRST_SONG_PROMPT_TEMPLATE):
             response, raw, parsed = _llm_call_with_history(
-                messages, temperature=0.9, tools=[SPOTIFY_SEARCH_TOOL],
+                messages, temperature=0.9,
+                tools=[SPOTIFY_SEARCH_TOOL] if SPOTIFY_AVAILABLE else None,
             )
 
         # Handle tool call if the LLM wants to search
         spotify_results = []
-        if response.choices[0].message.tool_calls:
+        if SPOTIFY_AVAILABLE and response.choices[0].message.tool_calls:
             messages, spotify_results = _handle_tool_calls(response, messages)
             # Call LLM again to get final answer
             response, raw, parsed = _llm_call_with_history(messages, temperature=0.9)
 
         if spotify_results:
             track = spotify_results[0]
-        else:
+        elif SPOTIFY_AVAILABLE:
             query = f"{parsed.get('artist', '')} {parsed.get('track', '')}".strip() or "Bohemian Rhapsody Queen"
             results = _execute_spotify_search(query)
             track = results[0] if results else {
+                "track_id": "", "artist_name": parsed.get("artist", "Unknown"),
+                "track_name": parsed.get("track", "Unknown"), "embed_url": "",
+            }
+        else:
+            track = {
                 "track_id": "", "artist_name": parsed.get("artist", "Unknown"),
                 "track_name": parsed.get("track", "Unknown"), "embed_url": "",
             }
@@ -372,12 +396,13 @@ def get_next_song(session_id, strategist_messages, recommender_messages, vote_re
 
             with LLMObs.annotation_context(prompt=RECOMMENDER_PROMPT_TEMPLATE):
                 response, rec_raw, rec_parsed = _llm_call_with_history(
-                    recommender_messages, temperature=0.7, tools=[SPOTIFY_SEARCH_TOOL],
+                    recommender_messages, temperature=0.7,
+                    tools=[SPOTIFY_SEARCH_TOOL] if SPOTIFY_AVAILABLE else None,
                 )
 
             # Handle tool calls
             spotify_results = []
-            if response.choices[0].message.tool_calls:
+            if SPOTIFY_AVAILABLE and response.choices[0].message.tool_calls:
                 recommender_messages, spotify_results = _handle_tool_calls(response, recommender_messages)
                 # Call LLM again to get final JSON answer
                 response, rec_raw, rec_parsed = _llm_call_with_history(
@@ -388,10 +413,15 @@ def get_next_song(session_id, strategist_messages, recommender_messages, vote_re
 
             if spotify_results:
                 track = spotify_results[0]
-            else:
+            elif SPOTIFY_AVAILABLE:
                 query = f"{rec_parsed.get('artist', '')} {rec_parsed.get('track', '')}".strip() or "popular song"
                 results = _execute_spotify_search(query)
                 track = results[0] if results else {
+                    "track_id": "", "artist_name": rec_parsed.get("artist", "Unknown"),
+                    "track_name": rec_parsed.get("track", "Unknown"), "embed_url": "",
+                }
+            else:
+                track = {
                     "track_id": "", "artist_name": rec_parsed.get("artist", "Unknown"),
                     "track_name": rec_parsed.get("track", "Unknown"), "embed_url": "",
                 }
