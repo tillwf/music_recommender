@@ -19,7 +19,7 @@ LANGFUSE_HOST = os.environ.get("LANGFUSE_HOST", "https://cloud.langfuse.com")
 RAINDROP_WRITE_KEY = os.environ.get("RAINDROP_WRITE_KEY", "")
 
 # Datadog
-DD_SERVICE = os.environ["DD_SERVICE"]
+DD_SERVICE = os.environ.get("DD_SERVICE", "music-recommender")
 
 # App
 DATABASE_PATH = os.environ.get("DATABASE_PATH", "music_recommender.db")
